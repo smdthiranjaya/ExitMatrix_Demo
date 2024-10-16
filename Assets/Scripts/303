@@ -44,7 +44,6 @@ public class PositionTracker : MonoBehaviour
                 bool inZBounds = playerPos.z >= minBounds.z && playerPos.z <= maxBounds.z;
                 
                 Debug.Log($"  Player in bounds: X: {inXBounds}, Y: {inYBounds}, Z: {inZBounds}");
-                Debug.Log($"  Distance to room center: {Vector3.Distance(playerPos, room.position)}");
             }
         }
     }
