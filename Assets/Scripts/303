@@ -1,50 +1,79 @@
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.Networking;
+using System.Text;
 
 public class PositionTracker : MonoBehaviour
 {
-    public Transform player;
-    public BuildingStructure buildingStructure;
+    // ... (keep existing fields)
 
-    void Update()
+    [System.Serializable]
+    private class ErrorResponse
     {
-        UpdatePlayerPosition();
+        public string error;
     }
 
-    void UpdatePlayerPosition()
+    IEnumerator GetNavigationInstructions(int currentFloor, string currentRoom, Vector3 playerPosition)
     {
-        Vector3 playerPos = player.position;
-        Room currentRoom = buildingStructure.FindRoomForPosition(playerPos);
+        // ... (keep existing code for creating the request)
 
-        if (currentRoom != null)
+        using (UnityWebRequest webRequest = new UnityWebRequest(ApiUrl, "POST"))
         {
-            int floorNumber = Mathf.FloorToInt(playerPos.y / buildingStructure.defaultFloorHeight) + 1;
-            Debug.Log($"Player is on floor {floorNumber} in {currentRoom.name} at position: {playerPos}");
-        }
-        else
-        {
-            Debug.Log($"Player is outside of defined rooms. Position: {playerPos}");
-            DebugRoomPositions(playerPos);
-        }
-    }
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.SetRequestHeader("Content-Type", "application/json");
 
-    void DebugRoomPositions(Vector3 playerPos)
-    {
-        Debug.Log("Debugging room positions:");
-        foreach (var floor in buildingStructure.floors)
-        {
-            foreach (var room in floor.rooms)
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result == UnityWebRequest.Result.Success)
             {
-                Vector3 minBounds = room.position - room.size / 2;
-                Vector3 maxBounds = room.position + room.size / 2;
-                Debug.Log($"Room: {room.name}, Floor: {floor.floorNumber}, Position: {room.position}, Size: {room.size}");
-                Debug.Log($"  Bounds: Min {minBounds}, Max {maxBounds}");
+                string response = webRequest.downloadHandler.text;
+                Debug.Log("Received navigation instructions: " + response);
                 
-                bool inXBounds = playerPos.x >= minBounds.x && playerPos.x <= maxBounds.x;
-                bool inYBounds = playerPos.y >= room.position.y && playerPos.y < room.position.y + buildingStructure.defaultFloorHeight;
-                bool inZBounds = playerPos.z >= minBounds.z && playerPos.z <= maxBounds.z;
-                
-                Debug.Log($"  Player in bounds: X: {inXBounds}, Y: {inYBounds}, Z: {inZBounds}");
+                NavigationResponse navigationData = JsonUtility.FromJson<NavigationResponse>(response);
+                if (navigationData != null && navigationData.instructions != null)
+                {
+                    DisplayInstructions(navigationData.instructions);
+                }
+                else
+                {
+                    Debug.LogError("Failed to parse navigation response");
+                }
+            }
+            else
+            {
+                Debug.LogError("Error getting navigation instructions: " + webRequest.error);
+                Debug.LogError("Response Code: " + webRequest.responseCode);
+                string errorBody = webRequest.downloadHandler.text;
+                Debug.LogError("Response Body: " + errorBody);
+
+                // Try to parse the error message
+                ErrorResponse errorResponse = JsonUtility.FromJson<ErrorResponse>(errorBody);
+                if (errorResponse != null && !string.IsNullOrEmpty(errorResponse.error))
+                {
+                    Debug.LogError("Server Error: " + errorResponse.error);
+                }
             }
         }
     }
+
+    void DisplayInstructions(List<string> instructions)
+    {
+        if (instructions == null || instructions.Count == 0)
+        {
+            Debug.LogWarning("No navigation instructions received");
+            return;
+        }
+
+        Debug.Log("Navigation Instructions:");
+        foreach (var instruction in instructions)
+        {
+            Debug.Log(instruction);
+        }
+        // Here you would typically update your UI to display these instructions to the player
+    }
+
+    // ... (keep the rest of the existing code)
 }
